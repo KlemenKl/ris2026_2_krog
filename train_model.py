@@ -1,0 +1,146 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+import os
+import glob
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold
+
+from preprocessing import BacteriaDataset
+from model_arhitecture import ResNet3D
+from model_validation import plot_confusion_matrix, history_loss_acc
+
+def train_model(model, train_loader, val_loader, epochs=50, lr=0.001):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1) # Odpornost na napačne oznake
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
+
+    history = {'train_loss': [], 'val_acc': []}
+
+    for epoch in range(epochs):
+        model.train()
+        running_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            
+            running_loss += loss.item()
+
+        # Validacija
+        model.eval()
+        correct = 0
+        total = 0
+        val_loss = 0.0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+        epoch_loss = running_loss / len(train_loader)
+        val_acc = 100 * correct / total
+        scheduler.step(val_loss)
+        
+        history['train_loss'].append(epoch_loss)
+        history['val_acc'].append(val_acc)
+        
+        print(f"Epoch {epoch+1}/{epochs} - Loss: {epoch_loss:.4f} - Val Acc: {val_acc:.2f}%")
+
+    return model, history
+
+class_map = {
+    'Ecoli': 0, 'Efae': 1, 'Kaer': 2, 'Kpne': 3,
+    'Paer': 4, 'Saur': 5, 'Sepi': 6, 'Spyo': 7
+}
+
+data_folder = 'data/train/'
+file_paths = []
+labels = []
+
+for class_name, class_idx in class_map.items():
+    search_path = os.path.join(data_folder, class_name, "*.npy")
+    files = glob.glob(search_path)
+    file_paths.extend(files)
+    labels.extend([class_idx] * len(files))
+
+# Train (80%) in Validation (20%)
+train_files, val_files, train_labels, val_labels = train_test_split(file_paths, labels, test_size=0.2, random_state=42, stratify=labels)
+
+print("Splitted data: DONE")
+# Definiramo ciljno obliko (Depth, Height, Width)
+# Če imaš npr. 200 valovnih dolžin, nastavi target_shape na (200, 64, 64)
+# Če je tvoj RAM/GPU omejen, zmanjšaj Height in Width
+TARGET_SHAPE = (184, 64, 64) 
+
+# train_dataset = BacteriaDataset(train_files, train_labels, target_shape=TARGET_SHAPE)
+# val_dataset = BacteriaDataset(val_files, val_labels, target_shape=TARGET_SHAPE)
+# print("In bacteria dataset: DONE")
+
+# train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=2)
+# val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=2)
+# print("In DataLoader: DONE")
+
+# Model init
+# model = ResNet3D(num_classes=8)
+# print("Model init: DONE")
+
+# Konfiguracija
+K_FOLDS = 5
+file_paths = np.array(file_paths) # Pretvori v numpy za lažje indeksiranje
+labels = np.array(labels)
+
+skf = StratifiedKFold(n_splits=K_FOLDS, shuffle=True, random_state=42)
+fold_results = []
+
+for fold, (train_idx, val_idx) in enumerate(skf.split(file_paths, labels)):
+    print(f"\n--- Treniranje Fold {fold+1}/{K_FOLDS} ---")
+    
+    # Razdelitev podatkov za ta fold
+    train_sub_files = file_paths[train_idx]
+    train_sub_labels = labels[train_idx]
+    val_sub_files = file_paths[val_idx]
+    val_sub_labels = labels[val_idx]
+    
+    # Ustvarjanje dataloaderjev
+    train_dataset = BacteriaDataset(train_sub_files, train_sub_labels, target_shape=TARGET_SHAPE)
+    val_dataset = BacteriaDataset(val_sub_files, val_sub_labels, target_shape=TARGET_SHAPE)
+    
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False)
+    
+    # Ponovna inicializacija modela (da začne iz nič!)
+    model = ResNet3D(num_classes=8)
+    
+    # Treniranje
+    trained_model, history = train_model(model, train_loader, val_loader, epochs=3, lr=0.0005)
+    
+    # Shrani najboljšo natančnost tega folda
+    best_acc = max(history['val_acc'])
+    fold_results.append(best_acc)
+    print(f"Fold {fold+1} končan. Najboljša natančnost: {best_acc:.2f}%")
+
+print(f"\nSkupna povprečna natančnost: {np.mean(fold_results):.2f}% (+/- {np.std(fold_results):.2f}%)")
+print("Model training: DONE")
+
+class_names = ['Ecoli', 'Efae', 'Kaer', 'Kpne', 'Paer', 'Saur', 'Sepi', 'Spyo']
+plot_confusion_matrix(trained_model, val_loader, class_names)
+
+history_loss_acc(history)
+
+# Shranjevanje modela
+torch.save(trained_model.state_dict(), 'bacteria_resnet3d_10.pth')
+print("Done!")
