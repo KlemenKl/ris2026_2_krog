@@ -7,20 +7,35 @@ import os
 import glob
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import StratifiedKFold
+from sklearn.utils.class_weight import compute_class_weight
+
 
 from preprocessing import BacteriaDataset
 from model_arhitecture import ResNet3D
 from model_validation import plot_confusion_matrix, history_loss_acc
 
-def train_model(model, train_loader, val_loader, epochs=50, lr=0.001):
+def train_model(model, train_loader, val_loader, train_labels, epochs=50, lr=0.001):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+
+    # # Adjusting weights for class imbalance
+    # class_weights = compute_class_weight(
+    #     class_weight='balanced', 
+    #     classes=np.unique(train_labels), 
+    #     y=train_labels
+    # )
+    # weights_tensor = torch.tensor(class_weights, dtype=torch.float).to(device)
+
+    # Vstavi v loss funkcijo
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
     
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1) # Odpornost na napačne oznake
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
 
     history = {'train_loss': [], 'val_acc': []}
+    patience = 10
+    best_val_loss = float('inf')
+    counter = 0
 
     for epoch in range(epochs):
         model.train()
@@ -59,6 +74,16 @@ def train_model(model, train_loader, val_loader, epochs=50, lr=0.001):
         history['val_acc'].append(val_acc)
         
         print(f"Epoch {epoch+1}/{epochs} - Loss: {epoch_loss:.4f} - Val Acc: {val_acc:.2f}%")
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), 'best_model.pth')
+            counter = 0 # Ponastavi števec, ker smo našli boljši model
+        else:
+            counter += 1
+            
+        if counter >= patience:
+            print(f"Early stopping v epohi {epoch}")
+            break
 
     return model, history
 
@@ -71,14 +96,15 @@ data_folder = 'data/train/'
 file_paths = []
 labels = []
 
+print("Before splitted data: DONE")
 for class_name, class_idx in class_map.items():
     search_path = os.path.join(data_folder, class_name, "*.npy")
     files = glob.glob(search_path)
     file_paths.extend(files)
     labels.extend([class_idx] * len(files))
 
-# Train (80%) in Validation (20%)
-train_files, val_files, train_labels, val_labels = train_test_split(file_paths, labels, test_size=0.2, random_state=42, stratify=labels)
+# # Train (80%) in Validation (20%)
+# train_files, val_files, train_labels, val_labels = train_test_split(file_paths, labels, test_size=0.2, random_state=42, stratify=labels)
 
 print("Splitted data: DONE")
 # Definiramo ciljno obliko (Depth, Height, Width)
@@ -105,6 +131,7 @@ labels = np.array(labels)
 
 skf = StratifiedKFold(n_splits=K_FOLDS, shuffle=True, random_state=42)
 fold_results = []
+print(f"Starting {K_FOLDS}-fold cross-validation...")
 
 for fold, (train_idx, val_idx) in enumerate(skf.split(file_paths, labels)):
     print(f"\n--- Treniranje Fold {fold+1}/{K_FOLDS} ---")
@@ -116,8 +143,8 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(file_paths, labels)):
     val_sub_labels = labels[val_idx]
     
     # Ustvarjanje dataloaderjev
-    train_dataset = BacteriaDataset(train_sub_files, train_sub_labels, target_shape=TARGET_SHAPE)
-    val_dataset = BacteriaDataset(val_sub_files, val_sub_labels, target_shape=TARGET_SHAPE)
+    train_dataset = BacteriaDataset(train_sub_files, train_sub_labels, target_shape=TARGET_SHAPE, use_augmentation=True)
+    val_dataset = BacteriaDataset(val_sub_files, val_sub_labels, target_shape=TARGET_SHAPE, use_augmentation=False)
     
     train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False)
@@ -125,9 +152,10 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(file_paths, labels)):
     # Ponovna inicializacija modela (da začne iz nič!)
     model = ResNet3D(num_classes=8)
     
+    print("Preprocessing: DONE")
     # Treniranje
-    trained_model, history = train_model(model, train_loader, val_loader, epochs=3, lr=0.0005)
-    
+    trained_model, history = train_model(model, train_loader, val_loader, labels, epochs=100, lr=0.0005)
+
     # Shrani najboljšo natančnost tega folda
     best_acc = max(history['val_acc'])
     fold_results.append(best_acc)

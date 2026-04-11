@@ -1,6 +1,10 @@
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 
 def plot_confusion_matrix(model, val_loader, class_names):
     model.eval()
@@ -27,7 +31,7 @@ def plot_confusion_matrix(model, val_loader, class_names):
     plt.title('Confusion Matrix - Klasifikacija bakterij')
     plt.ylabel('Dejansko')
     plt.xlabel('Napovedano')
-    plt.show()
+    plt.savefig('confusion_matrix.png')
 
     # Izpis natančnega poročila (Precision, Recall, F1-score)
     print(classification_report(all_true, all_preds, target_names=class_names))

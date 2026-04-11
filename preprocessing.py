@@ -29,25 +29,85 @@ def preprocess_hsi(data, target_shape=(200, 64, 64)):
     # Če je slika večja od target_shape, jo obrežemo
     return padded_data[:td, :th, :tw]
 
+import random
+
+def augment_hsi(data):
+    """
+    data: numpy array oblika (C, D, H, W) -> (1, lambda, H, W)
+    """
+    # 1. Horizontalno in vertikalno zrcaljenje
+    if random.random() > 0.5:
+        data = np.flip(data, axis=2) # Flip Height
+    if random.random() > 0.5:
+        data = np.flip(data, axis=3) # Flip Width
+
+    # 2. Rotacije za 90, 180 ali 270 stopinj
+    k = random.randint(0, 3)
+    data = np.rot90(data, k, axes=(2, 3))
+
+    # 3. Dodajanje spektralnega šuma (zelo pomembno za HSI!)
+    # Doda majhne variacije v intenziteto odboja (0.1% šuma)
+    if random.random() > 0.5:
+        noise = np.random.normal(0, 0.001, data.shape)
+        data = data + noise
+        data = np.clip(data, 0, 1) # Ohranimo range [0, 1]
+
+    return data.copy()
+
 class BacteriaDataset(Dataset):
-    def __init__(self, file_paths, labels, target_shape=(200, 64, 64)):
+    def __init__(self, file_paths, labels, target_shape=(200, 96, 96), use_augmentation=False):
         self.file_paths = file_paths
         self.labels = labels
         self.target_shape = target_shape
+        self.use_augmentation = use_augmentation
 
     def __len__(self):
         return len(self.file_paths)
 
+    def augment_hsi(self, data):
+        """
+        Izvaja prostorsko in spektralno augmentacijo na 4D polju (C, D, H, W).
+        """
+        # 1. Horizontalno in vertikalno zrcaljenje
+        if random.random() > 0.5:
+            data = np.flip(data, axis=2)  # Os H
+        if random.random() > 0.5:
+            data = np.flip(data, axis=3)  # Os W
+
+        # 2. Rotacije za 90, 180 ali 270 stopinj
+        k = random.randint(0, 3)
+        data = np.rot90(data, k, axes=(2, 3))
+
+        # 3. Dodajanje majhnega spektralnega šuma (Gaussov šum)
+        # Pomaga pri robusnosti na napake senzorja
+        if random.random() > 0.5:
+            noise = np.random.normal(0, 0.001, data.shape)
+            data = data + noise
+            data = np.clip(data, 0, 1)
+
+        return data.copy()
+
     def __getitem__(self, idx):
+        # Nalaganje podatkov
         raw_data = np.load(self.file_paths[idx])
-        # Preuredimo iz (x, y, lambda) v (lambda, y, x) če je potrebno
+        
+        # Preureditev v (lambda, y, x)
         if raw_data.shape[-1] == self.target_shape[0]:
             raw_data = np.transpose(raw_data, (2, 1, 0))
             
+        # Tvoja obstoječa funkcija za normalizacijo in padding
         processed_data = preprocess_hsi(raw_data, self.target_shape)
         
-        # PyTorch 3D CNN pričakuje: (Channel, Depth, Height, Width)
-        tensor_data = torch.from_numpy(processed_data).float().unsqueeze(0)
-        label = torch.tensor(self.labels[idx]).long()
+        # Priprava za PyTorch (Channel, Depth, Height, Width)
+        # Dodamo Channel dimenzijo (1, 200, 64, 64)
+        tensor_data = processed_data[np.newaxis, ...]
         
-        return tensor_data, label
+        # Izvedba augmentacije, če je vklopljena
+        if self.use_augmentation:
+            tensor_data = self.augment_hsi(tensor_data)
+            
+        # Pretvorba v tensorje
+        x = torch.from_numpy(tensor_data).float()
+        y = torch.tensor(self.labels[idx]).long()
+        
+        return x, y
