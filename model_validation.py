@@ -31,7 +31,7 @@ def plot_confusion_matrix(model, val_loader, class_names):
     plt.title('Confusion Matrix - Klasifikacija bakterij')
     plt.ylabel('Dejansko')
     plt.xlabel('Napovedano')
-    plt.savefig('confusion_matrix.png')
+    plt.savefig('confusion_matrix_2d.png')
 
     # Izpis natančnega poročila (Precision, Recall, F1-score)
     print(classification_report(all_true, all_preds, target_names=class_names))
@@ -51,5 +51,5 @@ def history_loss_acc(history):
     plt.plot(history['val_acc'], label='Val Accuracy')
     plt.title('Natančnost (Accuracy)')
     plt.legend()
-    plt.savefig('training_history.png')
+    plt.savefig('training_history_2d.png')
 

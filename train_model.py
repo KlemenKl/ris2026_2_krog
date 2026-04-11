@@ -10,8 +10,10 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.utils.class_weight import compute_class_weight
 
 
-from preprocessing import BacteriaDataset
-from model_arhitecture import ResNet3D
+# from preprocessing import BacteriaDataset
+from preprocessing import BacteriaDataset_2D
+# from model_arhitecture import ResNet3D
+from model_architecture_2d import ResNet2D
 from model_validation import plot_confusion_matrix, history_loss_acc
 
 def train_model(model, train_loader, val_loader, train_labels, epochs=50, lr=0.001):
@@ -143,14 +145,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(file_paths, labels)):
     val_sub_labels = labels[val_idx]
     
     # Ustvarjanje dataloaderjev
-    train_dataset = BacteriaDataset(train_sub_files, train_sub_labels, target_shape=TARGET_SHAPE, use_augmentation=True)
-    val_dataset = BacteriaDataset(val_sub_files, val_sub_labels, target_shape=TARGET_SHAPE, use_augmentation=False)
+    train_dataset = BacteriaDataset_2D(train_sub_files, train_sub_labels, target_shape=TARGET_SHAPE, use_augmentation=True)
+    val_dataset = BacteriaDataset_2D(val_sub_files, val_sub_labels, target_shape=TARGET_SHAPE, use_augmentation=False)
     
     train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False)
     
     # Ponovna inicializacija modela (da začne iz nič!)
-    model = ResNet3D(num_classes=8)
+    model = ResNet2D(num_classes=8)
     
     print("Preprocessing: DONE")
     # Treniranje
@@ -170,5 +172,5 @@ plot_confusion_matrix(trained_model, val_loader, class_names)
 history_loss_acc(history)
 
 # Shranjevanje modela
-torch.save(trained_model.state_dict(), 'bacteria_resnet3d_10.pth')
+torch.save(trained_model.state_dict(), 'bacteria_resnet2d_10.pth')
 print("Done!")

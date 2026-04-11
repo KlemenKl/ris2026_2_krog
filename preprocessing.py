@@ -111,3 +111,56 @@ class BacteriaDataset(Dataset):
         y = torch.tensor(self.labels[idx]).long()
         
         return x, y
+        
+class BacteriaDataset_2D(Dataset):
+    def __init__(self, file_paths, labels, target_shape=(200, 96, 96), use_augmentation=False):
+        self.file_paths = file_paths
+        self.labels = labels
+        self.target_shape = target_shape
+        self.use_augmentation = use_augmentation
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def augment_hsi(self, data):
+        """
+        Izvaja prostorsko in spektralno augmentacijo na 3D polju (C, H, W).
+        """
+        # 1. Horizontalno in vertikalno zrcaljenje
+        # SPREMEMBA: Osi so zdaj 1 (H) in 2 (W), ker nimamo Channel dimenzije na začetku
+        if random.random() > 0.5:
+            data = np.flip(data, axis=1)  
+        if random.random() > 0.5:
+            data = np.flip(data, axis=2)  
+
+        # 2. Rotacije
+        k = random.randint(0, 3)
+        data = np.rot90(data, k, axes=(1, 2))
+
+        # 3. Dodajanje šuma
+        if random.random() > 0.5:
+            noise = np.random.normal(0, 0.001, data.shape)
+            data = data + noise
+            data = np.clip(data, 0, 1)
+
+        return data.copy()
+
+    def __getitem__(self, idx):
+        raw_data = np.load(self.file_paths[idx])
+        
+        if raw_data.shape[-1] == self.target_shape[0]:
+            raw_data = np.transpose(raw_data, (2, 0, 1)) # Preureditev v (C, H, W)
+            
+        processed_data = preprocess_hsi(raw_data, self.target_shape)
+        
+        # SPREMEMBA ZA 2D: 
+        # Ne uporabimo np.newaxis! processed_data mora imeti obliko (200, 96, 96)
+        tensor_data = processed_data 
+        
+        if self.use_augmentation:
+            tensor_data = self.augment_hsi(tensor_data)
+            
+        x = torch.from_numpy(tensor_data).float()
+        y = torch.tensor(self.labels[idx]).long()
+        
+        return x, y
