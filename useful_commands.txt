@@ -1,0 +1,104 @@
+srun --partition=gpu --cpus-per-task=8 --time=01:30:00 --mem=16G ~/ml_env/bin/python3 data_variation.py
+
+USEFUL THINGS TO DO ISTO KOT PREJ:
+Augmentacija: Ker imate le 659 slik, uporabite rotacije in zrcaljenja (če delate s celimi slikami).
+Robustnost na napake: Navodilo pravi, da oznake (labels) morda niso 100 % točne. Uporabite funkcijo izgube (loss function), ki je odporna na šum, npr. Label Smoothing.
+Cross-validation: Obvezno uporabite k-kratno preverjanje, da dobite realno oceno natančnosti.
+
+#############################
+# 3D arhitektura
+#############################
+Skupna povprečna natančnost: 81.00% (+/- 3.10%)
+
+        precision    recall  f1-score   support
+Ecoli      0.69      0.79      0.73        14
+Efae       0.82      0.74      0.78        19
+Kaer       0.00      0.00      0.00         3
+Kpne       1.00      0.86      0.92         7
+Paer       0.00      0.00      0.00         4
+Saur       0.80      0.80      0.80        20
+Sepi       0.81      0.90      0.86        63
+Spyo       0.00      0.00      0.00         1
+
+    accuracy                           0.79       131
+   macro avg       0.52      0.51      0.51       131
+weighted avg       0.76      0.79      0.77       131 
+
+#############################
+# 2D arhitektura
+#############################
+Skupna povprečna natančnost: 83.28% (+/- 2.61%)
+
+        precision    recall  f1-score   support
+Ecoli       0.62      0.71      0.67        14
+Efae       0.94      0.79      0.86        19
+Kaer       0.00      0.00      0.00         3
+Kpne       1.00      0.86      0.92         7
+Paer       0.67      0.50      0.57         4
+Saur       0.76      0.65      0.70        20
+Sepi       0.79      0.92      0.85        63
+Spyo       0.00      0.00      0.00         1
+
+    accuracy                           0.79       131
+   macro avg       0.60      0.55      0.57       131
+weighted avg       0.78      0.79      0.78       131
+
+#############################
+# 2D arhitektura + aggresive augmentation
+#############################
+Skupna povprečna natančnost: 81.77% (+/- 2.84%)
+
+              precision    recall  f1-score   support
+
+       Ecoli       0.65      0.93      0.76        14
+        Efae       0.93      0.74      0.82        19
+        Kaer       0.00      0.00      0.00         3
+        Kpne       1.00      0.86      0.92         7
+        Paer       1.00      0.75      0.86         4
+        Saur       0.82      0.70      0.76        20
+        Sepi       0.84      0.94      0.89        63
+        Spyo       0.00      0.00      0.00         1
+
+    accuracy                           0.83       131
+   macro avg       0.66      0.61      0.63       131
+weighted avg       0.82      0.83      0.82       131
+
+#############################
+# 2D arhitektura + aggresive augmentation + ensembl (glasovanje)
+#############################
+ENSEBML:
+            precision    recall  f1-score   support
+
+       Ecoli       0.68      0.93      0.79        14
+        Efae       1.00      0.95      0.97        19
+        Kaer       0.00      0.00      0.00         3
+        Kpne       1.00      1.00      1.00         7
+        Paer       0.75      0.75      0.75         4
+        Saur       0.86      0.90      0.88        20
+        Sepi       0.95      0.94      0.94        63
+        Spyo       0.00      0.00      0.00         1
+
+    accuracy                           0.90       131
+   macro avg       0.66      0.68      0.67       131
+weighted avg       0.88      0.90      0.89       131
+
+
+Skupna povprečna natančnost: 82.99% (+/- 3.64%)
+
+Standard metrics:
+              precision    recall  f1-score   support
+
+       Ecoli       0.55      0.86      0.67        14
+        Efae       0.94      0.89      0.92        19
+        Kaer       0.00      0.00      0.00         3
+        Kpne       1.00      1.00      1.00         7
+        Paer       0.60      0.75      0.67         4
+        Saur       0.83      0.75      0.79        20
+        Sepi       0.93      0.90      0.92        63
+        Spyo       0.00      0.00      0.00         1
+
+    accuracy                           0.85       131
+   macro avg       0.61      0.64      0.62       131
+weighted avg       0.84      0.85      0.84       131
+
+Done!

@@ -1,0 +1,93 @@
+NAVODILA ZA REPLIKACIJO REZULTATOV
+====================================
+
+Ekipa: siR
+
+OPIS DATOTEK
+------------
+
+train_model.py
+  Skripta za treniranje modela na podlagi učnih podatkov.
+
+data_parser.py
+  Razporedi podatke v mapi data/train v podmape, kjer vsaka mapa pripada eni vrsti bakterije.
+
+model_architecture_2d.py
+  Postavi 2D ResNet18 strukturo nevronske mreže
+
+model_validation.py
+  Vsebuje različne funkcije za validacijo modela in iskanje možnih izboljšav.
+
+preprocessing.py
+  Izvede transformacije in augemntacijo podatkov, da izboljšamo treniranje nevronske mreže.
+
+predict.py
+  Naredi napovedi glede na modele.
+
+best_model_fold_0.pth
+best_model_fold_1.pth
+best_model_fold_2.pth
+best_model_fold_3.pth
+best_model_fold_4.pth
+  Modeli, ki so natrenirani z train_model.py 
+
+POTREBNA STRUKTURA MAP
+-----------------------
+
+RIS2026/
+  train_model.py
+  data_parser.py
+  model_architecture_2d.py
+  model_validation.py
+  preprocessing.py
+  predict.py
+  best_model_fold_0.pth
+  best_model_fold_1.pth
+  best_model_fold_2.pth
+  best_model_fold_3.pth
+  best_model_fold_4.pth
+  train.csv
+  data/
+    train/
+      AO/        ... podatki razreda AO
+      Ecoli/     ... podatki razreda Ecoli
+      Efae/      ... podatki razreda Efae
+      Kaer/      ... podatki razreda Kaer
+      Kpne/      ... podatki razreda Kpne
+      Paer/      ... podatki razreda Paer
+      Saur/      ... podatki razreda Saur
+      Sepi/      ... podatki razreda Sepi
+      Spyo/      ... podatki razreda Spyo
+    test/
+      *.npy      ... testni podatki (brez podmap, samo npy datoteke)
+  
+KAKO POGNATI
+------------
+Lokalno:
+1. python3 train_model.py # Naredi 5 najboljših modelov za posamezni fold
+2. python3 predict.py     # Na podlagi najboljših modelov naredi napovedi
+
+Na HPC (Linux, GPU):
+  srun --partition=gpu --gpus=1 --cpus-per-task=8 --time=08:00:00 \
+    ~/ml_env/bin/python3 -u train_model.py          # evalvacija
+  srun --partition=gpu --gpus=1 --cpus-per-task=8 --time=02:00:00 \
+    ~/ml_env/bin/python3 -u predict.py        # napovedi
+
+POTREBNE KNJIžNICE
+------------------
+
+torch
+torchvision
+scikit-learn (samo za model.py)
+numpy
+Pillow
+seaborn
+matplotlib
+
+IZHOD
+-----
+
+predict.py generira datoteko siR.txt v formatu:
+  ime_slike.npy,RAZRED
+  ime_slike.npy,RAZRED
+  ...
