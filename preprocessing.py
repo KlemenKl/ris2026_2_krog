@@ -34,34 +34,35 @@ def preprocess_hsi(data, target_shape=(200, 64, 64)):
 def augment_hsi(data):
     """
     data: (C, H, W) -> za tvoj 2D ResNet je C=200 ali 184
+    Izboljsana augmentacija: manj agresivno brisanje, vec variacije
     """
     # 1. Prostorske transformacije (Zrcaljenje + Rotacija)
     if random.random() > 0.5:
         data = np.flip(data, axis=1) # Flip Height
     if random.random() > 0.5:
         data = np.flip(data, axis=2) # Flip Width
-    
+
     k = random.randint(0, 3)
     data = np.rot90(data, k, axes=(1, 2))
 
-    # 2. Multiplikativni spektralni šum (Simulacija variacije osvetlitve)
-    # Celoten spekter slike rahlo posvetlimo/potamnimo (±2%)
+    # 2. Multiplikativni spektralni sum (Simulacija variacije osvetlitve)
+    # Celoten spekter slike rahlo posvetlimo/potamnimo (+-5%)
     if random.random() > 0.5:
-        brightness_factor = np.random.uniform(0.98, 1.02)
+        brightness_factor = np.random.uniform(0.95, 1.05)
         data = data * brightness_factor
 
-    # 3. Aditivni šum (tvoj obstoječi)
+    # 3. Aditivni sum
     if random.random() > 0.5:
-        noise = np.random.normal(0, 0.001, data.shape)
+        noise = np.random.normal(0, 0.002, data.shape)
         data = data + noise
 
-    # 4. Random Erasing (opcijsko, zelo agresivno)
-    # Izbrišemo majhen kvadratek v sliki, da se model ne zanaša na eno piko
-    if random.random() > 0.3:
+    # 4. Random Erasing - manj agresivno (30% verjetnost, manjsi kvadrat)
+    if random.random() > 0.7:
         h, w = data.shape[1], data.shape[2]
-        x = random.randint(0, h-10)
-        y = random.randint(0, w-10)
-        data[:, x:x+10, y:y+10] = 0
+        erase_size = random.randint(3, 8)
+        x = random.randint(0, max(1, h - erase_size))
+        y = random.randint(0, max(1, w - erase_size))
+        data[:, x:x+erase_size, y:y+erase_size] = 0
 
     return np.clip(data, 0, 1).copy()
 
@@ -136,25 +137,37 @@ class BacteriaDataset_2D(Dataset):
     def augment_hsi(self, data):
         """
         Izvaja prostorsko in spektralno augmentacijo na 3D polju (C, H, W).
+        Izboljsana verzija z vec variacije in manj agresivnim brisanjem.
         """
         # 1. Horizontalno in vertikalno zrcaljenje
-        # SPREMEMBA: Osi so zdaj 1 (H) in 2 (W), ker nimamo Channel dimenzije na začetku
         if random.random() > 0.5:
-            data = np.flip(data, axis=1)  
+            data = np.flip(data, axis=1)
         if random.random() > 0.5:
-            data = np.flip(data, axis=2)  
+            data = np.flip(data, axis=2)
 
-        # 2. Rotacije
+        # 2. Rotacije za 90, 180 ali 270 stopinj
         k = random.randint(0, 3)
         data = np.rot90(data, k, axes=(1, 2))
 
-        # 3. Dodajanje šuma
+        # 3. Multiplikativni spektralni sum (+-5%)
         if random.random() > 0.5:
-            noise = np.random.normal(0, 0.001, data.shape)
-            data = data + noise
-            data = np.clip(data, 0, 1)
+            brightness_factor = np.random.uniform(0.95, 1.05)
+            data = data * brightness_factor
 
-        return data.copy()
+        # 4. Aditivni sum
+        if random.random() > 0.5:
+            noise = np.random.normal(0, 0.002, data.shape)
+            data = data + noise
+
+        # 5. Random Erasing - 30% verjetnost
+        if random.random() > 0.7:
+            h, w = data.shape[1], data.shape[2]
+            erase_size = random.randint(3, 8)
+            x = random.randint(0, max(1, h - erase_size))
+            y = random.randint(0, max(1, w - erase_size))
+            data[:, x:x+erase_size, y:y+erase_size] = 0
+
+        return np.clip(data, 0, 1).copy()
 
     def __getitem__(self, idx):
         raw_data = np.load(self.file_paths[idx])
