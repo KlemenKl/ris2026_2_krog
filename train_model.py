@@ -18,8 +18,19 @@ def train_model(model, train_loader, val_loader, train_labels, epochs=50, lr=0.0
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    # Vstavi v loss funkcijo
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
+    # Uteži razredov za uravnoteženje neuravnoteženih podatkov
+    # Sepi=315, Spyo=6 -> brez uteži model predvideva skoraj samo Sepi
+    num_classes = 8
+    from collections import Counter
+    label_counts = Counter(train_labels.tolist() if hasattr(train_labels, 'tolist') else list(train_labels))
+    total_samples = sum(label_counts.values())
+    class_weights = torch.tensor(
+        [total_samples / (num_classes * label_counts[i]) for i in range(num_classes)],
+        dtype=torch.float32
+    ).to(device)
+    print(f"  Uteži razredov: {class_weights.cpu().numpy().round(2)}")
+
+    criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.05)
     
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
